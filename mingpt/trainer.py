@@ -43,6 +43,9 @@ class Trainer:
         self.model = self.model.to(self.device)
         print("running on device", self.device)
 
+        # pin memory only when training on CUDA; speeds up host->device copies
+        self.pin_memory = str(self.device).startswith('cuda')
+
         # variables that will be assigned to trainer class later for logging and etc
         self.iter_num = 0
         self.iter_time = 0.0
@@ -69,7 +72,7 @@ class Trainer:
             self.train_dataset,
             sampler=torch.utils.data.RandomSampler(self.train_dataset, replacement=True, num_samples=int(1e10)),
             shuffle=False,
-            pin_memory=True,
+            pin_memory=self.pin_memory,
             batch_size=config.batch_size,
             num_workers=config.num_workers,
         )
@@ -86,7 +89,8 @@ class Trainer:
             except StopIteration:
                 data_iter = iter(train_loader)
                 batch = next(data_iter)
-            batch = [t.to(self.device) for t in batch]
+            # non_blocking copies help when pin_memory=True (CUDA)
+            batch = [t.to(self.device, non_blocking=self.pin_memory) for t in batch]
             x, y = batch
 
             # forward the model
